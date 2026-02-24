@@ -59,7 +59,7 @@ class HoldemGameState:
         self.starting_stack = stack
         self._min_stack_seen = stack
         self.ai_style = ai_style
-        self.difficulty = difficulty if difficulty in ("easy", "medium", "hard") else "medium"
+        self.difficulty = difficulty if difficulty in ("easy", "medium", "hard", "legend") else "medium"
         self.challenge_target = max(0, challenge_target)
         self.challenge_max_hands = max(0, challenge_max_hands)
         self.challenge_met: Optional[bool] = None
@@ -314,8 +314,60 @@ class HoldemGameState:
         cat, tie = best_hand(cards)
         return min(1.0, 0.2 + (cat - 1) * 0.1 + (tie[0] / 14.0) * 0.2 if tie else 0.2)
 
+    def _get_ai_equity(self) -> dict:
+        """Win/tie/lose % for AI (player 1). Exact on river, Monte Carlo otherwise."""
+        if self.hand_finished or len(self.hole[1]) != 2:
+            return {"win_pct": 0.0, "tie_pct": 0.0, "lose_pct": 0.0}
+        try:
+            if len(self.community) == 5:
+                w, t, l = equity_exact_river(self.hole[1], self.community)
+            else:
+                w, t, l = equity_monte_carlo(self.hole[1], self.community, n_simulations=500)
+            return {"win_pct": w, "tie_pct": t, "lose_pct": l}
+        except Exception:
+            return {"win_pct": 0.0, "tie_pct": 0.0, "lose_pct": 0.0}
+
+    def _legend_suggested_action(self) -> Optional[str]:
+        """EV-optimal suggested action for Legend AI (player 1). Uses actual equity."""
+        legal = self.get_legal_actions()
+        if not legal:
+            return None
+        to_call = self.get_to_call()
+        if to_call == 0:
+            # Check or bet: use equity when available, else hand strength
+            eq = self._get_ai_equity()
+            effective = eq["win_pct"] + eq["tie_pct"] / 2.0
+            strength = self._hand_strength(1)
+            # Bet when we have a real edge (equity > 55% or strong hand)
+            should_bet = effective >= 55.0 if (eq["win_pct"] + eq["tie_pct"] + eq["lose_pct"]) > 0 else strength >= 0.6
+            if "bet" in legal and should_bet:
+                return "bet"
+            if "check" in legal:
+                return "check"
+            return "bet" if "bet" in legal else legal[0]
+        # Facing a bet: use break-even vs effective equity
+        eq = self._get_ai_equity()
+        effective = eq["win_pct"] + eq["tie_pct"] / 2.0
+        theory = self.get_theory()
+        break_even = theory.get("break_even_equity_pct", 0)
+        if break_even <= 0:
+            return "call" if "call" in legal else "fold"
+        if effective >= break_even + 8 and "raise" in legal:
+            return "raise"
+        if effective >= break_even:
+            return "call" if "call" in legal else "fold"
+        return "fold" if "fold" in legal else "call"
+
     def _ai_bet_probability(self) -> float:
         strength = self._hand_strength(1)
+        if self.difficulty == "legend":
+            # Legend: bet only with strong equity or hand
+            suggested = self._legend_suggested_action()
+            if suggested == "bet":
+                return 0.92
+            if suggested == "check":
+                return 0.08
+            return 0.35 + strength * 0.4
         if self.difficulty == "hard":
             return 0.3 + strength * 0.5
         if self.difficulty == "easy":
@@ -328,6 +380,21 @@ class HoldemGameState:
 
     def _ai_call_probability(self) -> float:
         strength = self._hand_strength(1)
+        if self.difficulty == "legend":
+            # Legend: use actual equity vs break-even (EV-based)
+            eq = self._get_ai_equity()
+            effective = eq["win_pct"] + eq["tie_pct"] / 2.0
+            to_call = self.get_to_call()
+            if to_call > 0 and self.pot + to_call > 0:
+                break_even = 100 * to_call / (self.pot + to_call)
+                if effective >= break_even + 3:
+                    return 0.95
+                if effective >= break_even:
+                    return 0.88
+                if effective < break_even - 3:
+                    return 0.12
+                return 0.5
+            return 0.3 + strength * 0.5
         if self.difficulty == "hard":
             # Use pot-odds logic: call when hand strength (proxy for equity) >= break-even
             to_call = self.get_to_call()
@@ -350,6 +417,13 @@ class HoldemGameState:
         legal = self.get_legal_actions()
         if not legal:
             return "check"
+        # Legend: follow EV-optimal action with high probability (92%), else randomise slightly
+        if self.difficulty == "legend":
+            suggested = self._legend_suggested_action()
+            if suggested and suggested in legal:
+                if random.random() < 0.92:
+                    return suggested
+            return random.choice(legal)
         if "check" in legal and "bet" in legal:
             return "bet" if random.random() < self._ai_bet_probability() else "check"
         if "fold" in legal and "call" in legal:

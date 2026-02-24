@@ -66,6 +66,7 @@ export default function Game() {
   const [session, setSession] = useState(DEFAULT_SESSION)
   const [showTheory, setShowTheory] = useState(false)
   const [showAchievements, setShowAchievements] = useState(false)
+  const [showGtoHint, setShowGtoHint] = useState(true)
   const [hint, setHint] = useState(null)
   const [config, setConfig] = useState({ starting_stack: 100, small_blind: 1, big_blind: 2, difficulty: 'medium' })
   const [equity, setEquity] = useState({ win_pct: 0, tie_pct: 0, lose_pct: 0 })
@@ -208,12 +209,18 @@ export default function Game() {
           </Link>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <label className="flex items-center gap-1.5 text-[var(--color-cream)]/70 text-xs">
+          <label
+            className={`flex items-center gap-1.5 text-xs ${difficulty === 'medium' ? 'text-[var(--color-cream)]/70' : 'text-[var(--color-cream)]/40 cursor-not-allowed'}`}
+            title={difficulty === 'medium' ? 'Opponent style: Tight = selective, Balanced = middle, Aggressive = bets/calls more' : 'AI style only applies when Difficulty is Medium'}
+          >
             <span>AI</span>
             <select
               value={aiStyle}
               onChange={(e) => setAiStyle(e.target.value)}
-              className="bg-white/5 border border-white/10 rounded px-2 py-1 text-[var(--color-cream)] text-xs focus:outline-none focus:ring-1 focus:ring-[var(--color-gold)]/50"
+              disabled={difficulty !== 'medium'}
+              className="bg-white/5 border border-white/10 rounded px-2 py-1 text-[var(--color-cream)] text-xs focus:outline-none focus:ring-1 focus:ring-[var(--color-gold)]/50 disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-label="AI opponent style: Tight, Balanced, or Aggressive"
+              aria-disabled={difficulty !== 'medium'}
             >
               <option value="tight">Tight</option>
               <option value="balanced">Balanced</option>
@@ -230,6 +237,7 @@ export default function Game() {
               <option value="easy">Easy</option>
               <option value="medium">Medium</option>
               <option value="hard">Hard</option>
+              <option value="legend">Legend</option>
             </select>
           </label>
           <button
@@ -353,8 +361,29 @@ export default function Game() {
               {!handFinished && message && resultText === null && (
                 <p className="text-[10px] text-[var(--color-cream)]/60">{message}</p>
               )}
-              {!handFinished && hint && (
-                <p className="text-[10px] text-[var(--color-gold)]/80"><span className="text-[var(--color-cream)]/60">GTO hint:</span> {hint}</p>
+              {!handFinished && (
+                <p className="text-[10px] text-[var(--color-gold)]/80 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                  {hint && showGtoHint ? (
+                    <>
+                      <span><span className="text-[var(--color-cream)]/60">GTO hint:</span> {hint}</span>
+                      <button
+                        type="button"
+                        onClick={() => setShowGtoHint(false)}
+                        className="text-[var(--color-cream)]/50 hover:text-[var(--color-cream)]/80 underline"
+                      >
+                        Hide
+                      </button>
+                    </>
+                  ) : hint ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowGtoHint(true)}
+                      className="text-[var(--color-cream)]/50 hover:text-[var(--color-gold)]/80"
+                    >
+                      Show GTO hint
+                    </button>
+                  ) : null}
+                </p>
               )}
               {!handFinished && yourCards.length >= 2 && (
                 <div className="w-full max-w-[140px] mt-0.5">
@@ -506,12 +535,13 @@ export default function Game() {
             {showTheory && (
               <div className="px-3 pb-3 pt-0 space-y-2 text-[10px] text-[var(--color-cream)]/70 border-t border-white/[0.06]">
                 <p><strong className="text-[var(--color-cream)]/90">Game theory:</strong> Call when your equity &gt; break-even %. GTO = unexploitable mixed strategy (Nash).</p>
-                <p>Difficulty: Easy · Medium · Hard. Challenge: 200 chips in 25 hands. Keys: C=check/call, B=bet, F=fold, R=raise, N=new game.</p>
+                <p>Difficulty: Easy · Medium · Hard · Legend. Challenge: 200 chips in 25 hands. Keys: C=check/call, B=bet, F=fold, R=raise, N=new game.</p>
+                <p className="text-[10px] text-[var(--color-cream)]/40 mt-1">AI style (Medium only): <strong className="text-[var(--color-cream)]/60">Tight</strong> = selective, <strong className="text-[var(--color-cream)]/60">Balanced</strong> = middle, <strong className="text-[var(--color-cream)]/60">Aggressive</strong> = bets and calls more.</p>
               </div>
             )}
           </div>
 
-          <p className="text-[10px] text-[var(--color-cream)]/40 flex-shrink-0">Keys: C B F R N · Diff: {config.difficulty}</p>
+          <p className="text-[10px] text-[var(--color-cream)]/40 flex-shrink-0">Keys: C B F R N · Diff: {config.difficulty ? config.difficulty.charAt(0).toUpperCase() + config.difficulty.slice(1) : '—'}</p>
         </aside>
       </div>
     </div>

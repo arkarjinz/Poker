@@ -221,7 +221,7 @@ def poker_new_hand(
     global holdem_state
     if ai_style not in ("tight", "aggressive", "balanced"):
         ai_style = "balanced"
-    if difficulty not in ("easy", "medium", "hard"):
+    if difficulty not in ("easy", "medium", "hard", "legend"):
         difficulty = "medium"
     if reset_stacks or holdem_state is None:
         holdem_state = HoldemGameState(
