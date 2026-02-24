@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Playfair Display", serif;
+  --font-sans: "Outfit", system-ui, sans-serif;
+  --color-felt: #0c2d1a;
+  --color-felt-light: #143d26;
+  --color-cream: #f5f0e6;
+  --color-gold: #d4a853;
+  --color-gold-dim: #b8923d;
+}
+
+@utility font-display {
+  font-family: var(--font-display);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply antialiased text-[var(--color-cream)] bg-[var(--color-felt)];
+    font-family: var(--font-sans);
+  }
+  h1, h2, h3 {
+    font-family: var(--font-display);
+  }
+}
+
+/* Full-screen game view: content scrolls so buttons never clip */
+.game-fullscreen {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.game-fullscreen .game-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.game-fullscreen main,
+.game-fullscreen aside {
+  min-height: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.animate-spin {
+  animation: spin 0.8s linear infinite;
+}
