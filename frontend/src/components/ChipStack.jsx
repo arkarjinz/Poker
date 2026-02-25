@@ -3,6 +3,7 @@ export default function ChipStack({ amount, label, color = "gold", inlineLabel =
     color === "red"
       ? "from-red-400 to-red-600 border-red-700/50"
       : "from-amber-400 to-amber-600 border-amber-700/50"
+  const value = Number(amount) || 0
   return (
     <div className={`flex flex-col items-center ${inlineLabel ? "gap-0.5" : "gap-1"}`}>
       <div
@@ -11,12 +12,14 @@ export default function ChipStack({ amount, label, color = "gold", inlineLabel =
       />
       {inlineLabel && label ? (
         <span className="text-[var(--color-cream)]/60 text-xs tabular-nums">
-          <span className="font-semibold text-[var(--color-cream)]">{amount}</span>
+          <span className="font-semibold text-[var(--color-cream)] min-w-[2.5ch] inline-block text-right">{value}</span>
           <span className="ml-1 opacity-80">{label}</span>
         </span>
       ) : (
         <>
-          <span className="text-[var(--color-cream)] font-semibold text-base tabular-nums">{amount}</span>
+          <span className="text-[var(--color-cream)] font-semibold text-base tabular-nums min-w-[3ch] inline-block text-center" title={`${value} chips`}>
+            {value}
+          </span>
           {label && <span className="text-[var(--color-cream)]/50 text-[11px] uppercase tracking-wider">{label}</span>}
         </>
       )}

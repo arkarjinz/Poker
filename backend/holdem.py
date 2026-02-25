@@ -1,6 +1,7 @@
 """
 Texas Hold'em - Heads-up, fixed limit style.
-Blinds: SB=1, BB=2. Bet size=2. One raise per round (max 4 per player per street).
+Blinds and bet size are configurable (real poker: table stakes). Default SB=1, BB=2, bet=2.
+One raise per round (max = 2× bet per player per street).
 Cards: (rank, suit) rank 2-14, suit 0-3 (s,h,d,c).
 """
 import random
@@ -10,7 +11,7 @@ from hand_eval import best_hand, hand_name, card_to_dict, parse_card
 from equity import equity_monte_carlo, equity_exact_river, hand_strength_0_100
 
 DEFAULT_STARTING_STACK = 100
-SB, BB, BET_SIZE = 1, 2, 2
+DEFAULT_SB, DEFAULT_BB, DEFAULT_BET = 1, 2, 2
 STREET_NAMES = ["Preflop", "Flop", "Turn", "River"]
 
 ACHIEVEMENTS_DEF = {
@@ -40,6 +41,9 @@ class HoldemGameState:
         difficulty: str = "medium",
         challenge_target: int = 0,
         challenge_max_hands: int = 0,
+        small_blind: int = DEFAULT_SB,
+        big_blind: int = DEFAULT_BB,
+        bet_size: int | None = None,
     ):
         self.deck: list[tuple[int, int]] = []
         self.hole: list[list[tuple[int, int]]] = [[], []]  # [player, ai]
@@ -54,7 +58,12 @@ class HoldemGameState:
         self.actions_history: list[tuple[int, str]] = []
         self.street = 0  # 0 preflop, 1 flop, 2 turn, 3 river
         self.dealer = 0  # 0 = human is dealer (SB), 1 = AI is dealer (SB)
-        stack = max(20, min(starting_stack, 500))
+        self.sb = max(1, min(small_blind, 10))
+        self.bb = max(self.sb, min(big_blind, 20))
+        if self.bb < self.sb:
+            self.bb = self.sb * 2
+        self.bet_size = bet_size if bet_size is not None and 1 <= bet_size <= 20 else self.bb
+        stack = max(20, min(starting_stack, 5000))
         self.stacks = [stack, stack]
         self.starting_stack = stack
         self._min_stack_seen = stack
@@ -87,23 +96,23 @@ class HoldemGameState:
         return self._player_contribution_this_hand
 
     def _post_blinds(self) -> None:
-        # dealer = SB, other = BB
+        # dealer = SB, other = BB (real poker)
         sb_player, bb_player = self.dealer, 1 - self.dealer
-        self.stacks[sb_player] -= SB
-        self.stacks[bb_player] -= BB
-        self.bets_this_round[sb_player] = SB
-        self.bets_this_round[bb_player] = BB
-        self.pot = SB + BB
-        self.last_bet = BB
+        self.stacks[sb_player] -= self.sb
+        self.stacks[bb_player] -= self.bb
+        self.bets_this_round[sb_player] = self.sb
+        self.bets_this_round[bb_player] = self.bb
+        self.pot = self.sb + self.bb
+        self.last_bet = self.bb
         if sb_player == 0:
-            self._player_contribution_this_hand = SB
+            self._player_contribution_this_hand = self.sb
         else:
             self._player_contribution_this_hand = 0
-        # Preflop: BB acts first
+        # Preflop: BB acts first (real poker)
         self.current_player = bb_player
 
     def deal(self) -> None:
-        if self.stacks[0] < BB or self.stacks[1] < BB:
+        if self.stacks[0] < self.bb or self.stacks[1] < self.bb:
             self.stacks = [self.starting_stack, self.starting_stack]
         self.deck = make_deck()
         random.shuffle(self.deck)
@@ -230,7 +239,8 @@ class HoldemGameState:
             return ["check", "bet"]
         # Can call or raise (one raise per round: last_bet can go to 4 if it was 2)
         actions = ["fold", "call"]
-        if self.last_bet < 4 and self.stacks[self.current_player] >= to_call + BET_SIZE:
+        max_bet_this_round = 2 * self.bet_size
+        if self.last_bet < max_bet_this_round and self.stacks[self.current_player] >= to_call + self.bet_size:
             actions.append("raise")
         return actions
 
@@ -281,7 +291,7 @@ class HoldemGameState:
             return None
 
         if action == "bet":
-            self._put_money(BET_SIZE)
+            self._put_money(self.bet_size)
             self.last_bet = self.bets_this_round[self.current_player]
             self.actions_history.append((self.current_player, "bet"))
             self.current_player = 1 - self.current_player
@@ -289,7 +299,7 @@ class HoldemGameState:
 
         if action == "raise":
             to_call = self.get_to_call()
-            add = to_call + BET_SIZE
+            add = to_call + self.bet_size
             self._put_money(add)
             self.last_bet = self.bets_this_round[self.current_player]
             self.actions_history.append((self.current_player, "raise"))

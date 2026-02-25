@@ -152,8 +152,8 @@ def _config() -> GameConfig:
         return GameConfig(starting_stack=100, small_blind=1, big_blind=2, difficulty="medium")
     return GameConfig(
         starting_stack=holdem_state.starting_stack,
-        small_blind=1,
-        big_blind=2,
+        small_blind=holdem_state.sb,
+        big_blind=holdem_state.bb,
         difficulty=holdem_state.difficulty,
     )
 
@@ -217,6 +217,8 @@ def poker_new_hand(
     difficulty: str = "medium",
     challenge_target: int = 0,
     challenge_max_hands: int = 0,
+    small_blind: int = 1,
+    big_blind: int = 2,
 ):
     global holdem_state
     if ai_style not in ("tight", "aggressive", "balanced"):
@@ -230,6 +232,8 @@ def poker_new_hand(
             difficulty=difficulty,
             challenge_target=challenge_target,
             challenge_max_hands=challenge_max_hands,
+            small_blind=small_blind,
+            big_blind=big_blind,
         )
     else:
         holdem_state.ai_style = ai_style

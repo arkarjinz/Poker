@@ -69,9 +69,30 @@ export default function Game() {
   const [showGtoHint, setShowGtoHint] = useState(true)
   const [hint, setHint] = useState(null)
   const [config, setConfig] = useState({ starting_stack: 100, small_blind: 1, big_blind: 2, difficulty: 'medium' })
+  // Table stakes (real poker: chosen when you sit / start new game)
+  const [startingStack, setStartingStack] = useState(100)
+  const [smallBlind, setSmallBlind] = useState(1)
+  const [bigBlind, setBigBlind] = useState(2)
   const [equity, setEquity] = useState({ win_pct: 0, tie_pct: 0, lose_pct: 0 })
   const [handStrengthPct, setHandStrengthPct] = useState(0)
   const [theory, setTheory] = useState({ break_even_equity_pct: 0, to_call: 0, pot: 0, gto_note: '' })
+  const [potAnimating, setPotAnimating] = useState(false)
+
+  // Show the opponent's most recent action (so it stays visible on your turn)
+  const lastOpponentAction = history.length > 0
+    ? [...history].reverse().find((a) => a.player === 1)
+    : null
+  const actionLabel = lastOpponentAction
+    ? `Opponent ${lastOpponentAction.action}s`
+    : null
+
+  // Trigger pot pulse when pot value changes
+  useEffect(() => {
+    if (pot === 0) return
+    setPotAnimating(true)
+    const t = setTimeout(() => setPotAnimating(false), 500)
+    return () => clearTimeout(t)
+  }, [pot])
 
   const applyState = useCallback((data) => {
     setYourCards(data.your_cards || [])
@@ -81,8 +102,8 @@ export default function Game() {
     setHandNamePlayer(data.hand_name_player || '')
     setHandNameAi(data.hand_name_ai || '')
     setPot(data.pot)
-    setYourStack(data.your_stack)
-    setAiStack(data.ai_stack)
+    setYourStack(typeof data.your_stack === 'number' ? data.your_stack : Number(data.your_stack) || 0)
+    setAiStack(typeof data.ai_stack === 'number' ? data.ai_stack : Number(data.ai_stack) || 0)
     setToCall(data.to_call ?? 0)
     setYourBetThisHand(data.your_bet_this_hand ?? 0)
     setCurrentPlayer(data.current_player)
@@ -95,7 +116,12 @@ export default function Game() {
     setEquity(data.equity || { win_pct: 0, tie_pct: 0, lose_pct: 0 })
     setHandStrengthPct(data.hand_strength_pct ?? 0)
     setTheory(data.theory || { break_even_equity_pct: 0, to_call: 0, pot: 0, gto_note: '' })
-    if (data.config) setConfig(data.config)
+    if (data.config) {
+      setConfig(data.config)
+      setStartingStack(data.config.starting_stack ?? 100)
+      setSmallBlind(data.config.small_blind ?? 1)
+      setBigBlind(data.config.big_blind ?? 2)
+    }
   }, [])
 
   async function newHand(resetStacks = false, startChallenge = false) {
@@ -103,7 +129,7 @@ export default function Game() {
     setLoading(true)
     setHint(null)
     try {
-      const q = new URLSearchParams({ ai_style: aiStyle, difficulty })
+      const q = new URLSearchParams({ ai_style: aiStyle, difficulty, starting_stack: String(startingStack), small_blind: String(smallBlind), big_blind: String(bigBlind) })
       if (resetStacks) q.set('reset_stacks', 'true')
       if (startChallenge) {
         q.set('challenge_target', '200')
@@ -199,16 +225,16 @@ export default function Game() {
 
   return (
     <div className="game-fullscreen bg-[#051a12] flex flex-col">
-      <header className="flex-shrink-0 flex items-center justify-between px-4 py-2 bg-[#0a2419]/90 border-b border-white/5 flex-wrap gap-2">
-        <div className="flex items-center gap-3">
-          <Link to="/" className="text-[var(--color-cream)]/90 text-sm font-medium hover:text-[var(--color-gold)] transition">
+      <header className="flex-shrink-0 flex items-center justify-between px-3 md:px-4 py-1.5 md:py-2 bg-[#0a2419]/90 border-b border-white/5 flex-wrap gap-1.5 md:gap-2">
+        <div className="flex items-center gap-2 md:gap-3">
+          <Link to="/" className="text-[var(--color-cream)]/90 text-xs md:text-sm font-medium hover:text-[var(--color-gold)] transition">
             ← Home
           </Link>
-          <Link to="/how-to-play" className="text-[var(--color-cream)]/70 text-sm font-medium hover:text-[var(--color-gold)] transition">
+          <Link to="/how-to-play" className="text-[var(--color-cream)]/70 text-xs md:text-sm font-medium hover:text-[var(--color-gold)] transition">
             Rules
           </Link>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-1.5 md:gap-2 flex-wrap justify-end">
           <label
             className={`flex items-center gap-1.5 text-xs ${difficulty === 'medium' ? 'text-[var(--color-cream)]/70' : 'text-[var(--color-cream)]/40 cursor-not-allowed'}`}
             title={difficulty === 'medium' ? 'Opponent style: Tight = selective, Balanced = middle, Aggressive = bets/calls more' : 'AI style only applies when Difficulty is Medium'}
@@ -240,6 +266,33 @@ export default function Game() {
               <option value="legend">Legend</option>
             </select>
           </label>
+          <label className="flex items-center gap-1.5 text-[var(--color-cream)]/70 text-xs" title="Starting stack (applies on New game)">
+            <span>Stack</span>
+            <select
+              value={startingStack}
+              onChange={(e) => setStartingStack(Number(e.target.value))}
+              className="bg-white/5 border border-white/10 rounded px-2 py-1 text-[var(--color-cream)] text-xs focus:outline-none focus:ring-1 focus:ring-[var(--color-gold)]/50"
+            >
+              <option value={100}>100</option>
+              <option value={200}>200</option>
+              <option value={500}>500</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-1.5 text-[var(--color-cream)]/70 text-xs" title="Blinds (apply on New game). Small blind / Big blind. Who pays which rotates each hand: dealer pays SB, other pays BB.">
+            <span>Blinds</span>
+            <select
+              value={`${smallBlind}/${bigBlind}`}
+              onChange={(e) => {
+                const [sb, bb] = e.target.value.split('/').map(Number)
+                setSmallBlind(sb)
+                setBigBlind(bb)
+              }}
+              className="bg-white/5 border border-white/10 rounded px-2 py-1 text-[var(--color-cream)] text-xs focus:outline-none focus:ring-1 focus:ring-[var(--color-gold)]/50"
+            >
+              <option value="1/2">1/2</option>
+              <option value="2/4">2/4</option>
+            </select>
+          </label>
           <button
             type="button"
             onClick={() => newHand(true)}
@@ -259,155 +312,204 @@ export default function Game() {
         </div>
       </header>
 
-      <div className="game-content flex flex-col lg:flex-row gap-3 p-3 max-w-6xl w-full mx-auto">
-        <main className="flex-1 flex flex-col items-center justify-center min-h-0 min-w-0 py-2 pb-6">
+      <div className="game-content flex flex-col lg:flex-row gap-2 md:gap-3 p-2 md:p-3 max-w-6xl w-full mx-auto">
+        <main className="flex-1 flex flex-col items-center justify-center min-h-0 min-w-0 py-1 md:py-2 overflow-hidden">
           {session.challenge_met === true && (
-            <div className="flex-shrink-0 mb-2 px-3 py-1.5 rounded-full text-xs font-bold bg-[var(--color-gold)]/30 text-[var(--color-gold)]">
+            <div className="flex-shrink-0 mb-1 px-2 py-1 rounded-full text-[10px] font-bold bg-[var(--color-gold)]/30 text-[var(--color-gold)]">
               Challenge complete!
             </div>
           )}
           {session.challenge_met === false && (
-            <div className="flex-shrink-0 mb-2 px-3 py-1.5 rounded-full text-xs bg-red-500/20 text-red-300">
+            <div className="flex-shrink-0 mb-1 px-2 py-1 rounded-full text-[10px] bg-red-500/20 text-red-300">
               Challenge failed
             </div>
           )}
-          {resultText && (
-            <div
-              className={`flex-shrink-0 mb-2 px-3 py-1.5 rounded-full text-xs font-medium ${
-                winner === 0 ? 'bg-[var(--color-gold)]/20 text-[var(--color-gold)]' : winner === -1 ? 'bg-white/10 text-[var(--color-cream)]' : 'bg-white/5 text-[var(--color-cream)]/80'
-              }`}
-              role="status"
-              aria-live="polite"
-            >
-              {resultText}
-            </div>
-          )}
-
           {error && (
-            <div className="flex-shrink-0 mb-2 px-3 py-1.5 rounded-lg bg-red-500/15 text-red-300 text-xs text-center max-w-md flex flex-col items-center gap-1.5" role="alert" aria-live="assertive">
+            <div className="flex-shrink-0 mb-1 px-2 py-1 rounded-lg bg-red-500/15 text-red-300 text-[10px] text-center max-w-md flex flex-col items-center gap-1" role="alert" aria-live="assertive">
               <p>{error}</p>
               <button
                 type="button"
                 onClick={() => { setError(null); newHand(true) }}
-                className="px-2 py-1 rounded text-[10px] font-medium bg-red-500/20 text-red-200 hover:bg-red-500/30 transition"
+                className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-red-500/20 text-red-200 hover:bg-red-500/30 transition"
               >
                 Retry / New game
               </button>
             </div>
           )}
+          {/* Loading overlay: show when waiting for AI */}
           {loading && (
-            <div className="flex-shrink-0 mb-2 flex items-center justify-center gap-2 text-[var(--color-cream)]/70 text-xs" aria-busy="true" aria-live="polite">
-              <span className="inline-block w-4 h-4 border-2 border-[var(--color-gold)]/50 border-t-[var(--color-gold)] rounded-full animate-spin" />
-              Loading…
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#051a12]/80" aria-busy="true" aria-live="polite">
+              <div className="flex flex-col items-center gap-3 px-6 py-4 rounded-xl border-2 border-[var(--color-gold)]/50 bg-[#0a2419] shadow-lg">
+                <span className="inline-block w-10 h-10 border-2 border-[var(--color-gold)]/50 border-t-[var(--color-gold)] rounded-full animate-spin" />
+                <span className="text-base font-semibold text-[var(--color-cream)]">AI is thinking…</span>
+              </div>
             </div>
           )}
 
+          <div className="flex flex-col md:flex-row items-center md:items-start justify-center gap-3 md:gap-4 w-full max-w-3xl">
+          {/* Left strip on dark green: opponent action + GTO hint (outside table) */}
+          <div className="flex flex-col gap-3 w-32 flex-shrink-0 md:mt-12 order-2 md:order-1">
+            {!handFinished && actionLabel && (
+              <div
+                key={actionLabel}
+                className="animate-action-announce px-2.5 py-2 rounded-lg border border-[var(--color-gold)]/60 bg-[var(--color-gold)]/15 text-left"
+                role="status"
+                aria-live="polite"
+              >
+                <p className="text-[10px] text-[var(--color-cream)]/70 uppercase tracking-wider">Opponent</p>
+                <p className="text-sm font-semibold text-[var(--color-gold)]">{actionLabel}</p>
+              </div>
+            )}
+            {!handFinished && (
+              <div className="px-2.5 py-2 rounded-lg border border-white/10 bg-white/5 text-left">
+                <p className="text-[10px] text-[var(--color-cream)]/60 uppercase tracking-wider mb-1">GTO hint</p>
+                {hint && showGtoHint ? (
+                  <p className="text-xs text-[var(--color-gold)]/90">
+                    {hint}
+                    <button
+                      type="button"
+                      onClick={() => setShowGtoHint(false)}
+                      className="ml-1 text-[var(--color-cream)]/50 hover:text-[var(--color-cream)]/80 underline"
+                    >
+                      Hide
+                    </button>
+                  </p>
+                ) : hint ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowGtoHint(true)}
+                    className="text-xs text-[var(--color-cream)]/50 hover:text-[var(--color-gold)]/80 text-left"
+                  >
+                    Show GTO hint
+                  </button>
+                ) : (
+                  <p className="text-xs text-[var(--color-cream)]/40">—</p>
+                )}
+              </div>
+            )}
+          </div>
+
           <div
-            className="w-full max-w-md rounded-xl py-3 px-4 flex-shrink-0"
+            className="w-full max-w-md rounded-xl py-2 md:py-3 px-3 md:px-4 flex-shrink-0 pb-3 order-1 md:order-2"
             style={{
               background: 'linear-gradient(165deg, #0d2d1e 0%, #082218 100%)',
               boxShadow: 'inset 0 0 40px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.2)',
               border: '1px solid rgba(255,255,255,0.08)',
             }}
           >
-            {/* Opponent: two cards side-by-side */}
+            {/* Result banner: inside table so always visible */}
+            {resultText && (
+              <div
+                className={`animate-result-pop flex-shrink-0 mb-2 px-4 py-2 rounded-lg text-center text-sm font-semibold ${
+                  winner === 0 ? 'bg-[var(--color-gold)]/25 text-[var(--color-gold)]' : winner === -1 ? 'bg-white/15 text-[var(--color-cream)]' : 'bg-red-500/20 text-red-200'
+                }`}
+                role="status"
+                aria-live="polite"
+              >
+                {resultText}
+              </div>
+            )}
+            {/* Opponent: cards and chips only */}
             <div className="flex flex-col items-center gap-1 pb-2 border-b border-white/10">
-              <span className="text-[var(--color-cream)]/50 text-[10px] font-medium uppercase tracking-widest">Opponent</span>
+              <span className="text-[var(--color-cream)] text-[10px] font-semibold uppercase tracking-widest">Opponent</span>
               <div className="flex flex-row justify-center items-center gap-1.5">
                 {handFinished && aiCards.length >= 2
-                  ? aiCards.map((c, i) => <PokerCard key={i} card={c} faceDown={false} size="sm" />)
-                  : [0, 1].map((i) => <PokerCard key={i} faceDown={true} size="sm" />)}
+                  ? aiCards.map((c, i) => (
+                      <div key={i} className="animate-card-appear" style={{ animationDelay: `${i * 80}ms` }}>
+                        <PokerCard card={c} faceDown={false} size="sm" />
+                      </div>
+                    ))
+                  : [0, 1].map((i) => (
+                      <div key={i} className="animate-card-appear" style={{ animationDelay: `${i * 80}ms` }}>
+                        <PokerCard faceDown={true} size="sm" />
+                      </div>
+                    ))}
               </div>
               {handFinished && handNameAi && (
                 <p className="text-[10px] text-[var(--color-cream)]/70">{handNameAi}</p>
               )}
               <ChipStack amount={aiStack} color="red" />
+              <p className="text-[9px] text-[var(--color-cream)]/50">chips left</p>
             </div>
 
             {/* Board: five community cards in one horizontal row */}
-            <div className="flex flex-col items-center justify-center py-2 gap-0.5">
-              <span className="text-[var(--color-cream)]/50 text-[10px] font-medium uppercase tracking-widest">{street || 'Board'}</span>
-              <div className="flex flex-row justify-center items-center gap-0.5 flex-nowrap">
-                {[0, 1, 2, 3, 4].map((i) => (
-                  <PokerCard key={i} card={communityCards[i]} faceDown={!communityCards[i]} size="sm" />
-                ))}
+            <div className="flex flex-col items-center justify-center py-1.5 gap-0.5">
+              <span className="text-[var(--color-cream)] text-xs font-semibold uppercase tracking-widest">{street || 'Board'}</span>
+              <div className="flex flex-row justify-center items-center gap-1 flex-nowrap">
+                {[0, 1, 2, 3, 4].map((i) => {
+                  const c = communityCards[i]
+                  const cardKey = c ? `${i}-${c.rank}-${c.suit}` : `empty-${i}`
+                  return (
+                    <div key={cardKey} className="animate-card-appear" style={{ animationDelay: `${i * 70}ms` }}>
+                      <PokerCard card={c} faceDown={!c} size="sm" />
+                    </div>
+                  )
+                })}
               </div>
-              <p className="text-[var(--color-cream)]/60 text-[10px]">Pot <span className="text-[var(--color-gold)] font-semibold tabular-nums">{pot}</span></p>
+              <p className={`text-[var(--color-cream)]/60 text-xs ${potAnimating ? 'animate-pot-pulse' : ''}`}>
+                Pot <span className="text-[var(--color-gold)] font-semibold tabular-nums">{pot}</span>
+              </p>
             </div>
 
-            {/* You: two cards side-by-side */}
+            {/* You: cards, chips, hand strength, actions */}
             <div className="flex flex-col items-center gap-1 pt-2 border-t border-white/10">
-              <span className="text-[var(--color-cream)]/50 text-[10px] font-medium uppercase tracking-widest">You</span>
+              <span className="text-[var(--color-cream)] text-xs font-semibold uppercase tracking-widest">You</span>
               <div className="flex flex-row justify-center items-center gap-1.5">
                 {yourCards.length >= 2
-                  ? yourCards.map((c, i) => <PokerCard key={i} card={c} faceDown={false} size="md" />)
+                  ? yourCards.map((c, i) => (
+                      <div key={i} className="animate-card-appear" style={{ animationDelay: `${i * 80}ms` }}>
+                        <PokerCard card={c} faceDown={false} size="md" />
+                      </div>
+                    ))
                   : [0, 1].map((i) => (
-                      <div key={i} className="w-16 h-20 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0">
+                      <div key={i} className="w-16 h-20 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0 animate-card-appear" style={{ animationDelay: `${i * 80}ms` }}>
                         <span className="text-[var(--color-cream)]/30 text-xs">—</span>
                       </div>
                     ))}
               </div>
-              {handFinished && handNamePlayer && (
-                <p className="text-[10px] text-[var(--color-gold)]/90">{handNamePlayer}</p>
-              )}
-              <ChipStack amount={yourStack} />
-              <p className="text-[10px] text-[var(--color-cream)]/70">
-                In: <span className="font-semibold text-[var(--color-gold)] tabular-nums">{yourBetThisHand}</span>
-                {toCall > 0 && (
-                  <span className="ml-2">To call: <span className="font-semibold text-[var(--color-gold)] tabular-nums">{toCall}</span></span>
+                {handFinished && handNamePlayer && (
+                  <p className="text-[10px] text-[var(--color-gold)]/90">{handNamePlayer}</p>
                 )}
-              </p>
-
-              {!handFinished && message && resultText === null && (
-                <p className="text-[10px] text-[var(--color-cream)]/60">{message}</p>
-              )}
-              {!handFinished && (
-                <p className="text-[10px] text-[var(--color-gold)]/80 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                  {hint && showGtoHint ? (
-                    <>
-                      <span><span className="text-[var(--color-cream)]/60">GTO hint:</span> {hint}</span>
-                      <button
-                        type="button"
-                        onClick={() => setShowGtoHint(false)}
-                        className="text-[var(--color-cream)]/50 hover:text-[var(--color-cream)]/80 underline"
-                      >
-                        Hide
-                      </button>
-                    </>
-                  ) : hint ? (
-                    <button
-                      type="button"
-                      onClick={() => setShowGtoHint(true)}
-                      className="text-[var(--color-cream)]/50 hover:text-[var(--color-gold)]/80"
-                    >
-                      Show GTO hint
-                    </button>
-                  ) : null}
+                <ChipStack amount={yourStack} />
+                <p className="text-[9px] text-[var(--color-cream)]/50">chips left</p>
+                <p className="text-xs text-[var(--color-cream)]/70">
+                  In: <span className="font-semibold text-[var(--color-gold)] tabular-nums">{yourBetThisHand}</span>
+                  {toCall > 0 && (
+                    <span className="ml-2">To call: <span className="font-semibold text-[var(--color-gold)] tabular-nums">{toCall}</span></span>
+                  )}
                 </p>
-              )}
-              {!handFinished && yourCards.length >= 2 && (
-                <div className="w-full max-w-[140px] mt-0.5">
-                  <div className="flex justify-between text-[9px] text-[var(--color-cream)]/50 mb-0.5">
-                    <span>Hand strength</span>
-                    <span className="tabular-nums text-[var(--color-gold)]/90">{handStrengthPct}%</span>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-[var(--color-gold)]/60 to-[var(--color-gold)] transition-all duration-300"
-                      style={{ width: `${Math.min(100, handStrengthPct)}%` }}
-                    />
-                  </div>
-                </div>
-              )}
+                <p className="text-[9px] text-[var(--color-cream)]/40 italic">Stack updates after you bet, call, raise, or win.</p>
 
-              <div className="flex flex-wrap justify-center gap-1.5 mt-1" role="group" aria-label="Actions">
+                {!handFinished && message && resultText === null && (
+                  <p className="text-[10px] text-[var(--color-cream)]/60">{message}</p>
+                )}
+                {!handFinished && yourCards.length >= 2 && (
+                  <div className="w-full max-w-[140px] mt-0.5">
+                    <div className="flex justify-between text-[9px] text-[var(--color-cream)]/50 mb-0.5">
+                      <span>Hand strength</span>
+                      <span className="tabular-nums text-[var(--color-gold)]/90">{handStrengthPct}%</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-[var(--color-gold)]/60 to-[var(--color-gold)] transition-all duration-300"
+                        style={{ width: `${Math.min(100, handStrengthPct)}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div
+                className={`flex flex-wrap justify-center gap-1.5 mt-1 rounded-lg p-1.5 transition-shadow ${!handFinished && currentPlayer === 0 && !loading ? 'animate-your-turn' : ''}`}
+                role="group"
+                aria-label="Actions"
+              >
                 {handFinished ? (
                   <button
                     type="button"
                     onClick={() => newHand()}
                     disabled={loading}
                     aria-label="Deal new hand"
-                    className="px-4 py-2 rounded-lg bg-[var(--color-gold)] text-[#0a2419] text-xs font-semibold hover:bg-[var(--color-gold-dim)] disabled:opacity-50 transition"
+                    className="btn-action px-4 py-2 rounded-lg bg-[var(--color-gold)] text-[#0a2419] text-xs font-semibold hover:bg-[var(--color-gold-dim)] disabled:opacity-50 transition"
                   >
                     Deal new hand <span className="opacity-60">(N)</span>
                   </button>
@@ -419,7 +521,7 @@ export default function Game() {
                       onClick={() => act(a)}
                       disabled={loading || currentPlayer !== 0}
                       aria-label={a}
-                      className="px-3 py-1.5 rounded-lg bg-[var(--color-gold)]/90 text-[#0a2419] text-xs font-semibold hover:bg-[var(--color-gold)] disabled:opacity-50 disabled:cursor-not-allowed transition capitalize"
+                      className="btn-action px-3 py-1.5 rounded-lg bg-[var(--color-gold)]/90 text-[#0a2419] text-xs font-semibold hover:bg-[var(--color-gold)] disabled:opacity-50 disabled:cursor-not-allowed transition capitalize"
                     >
                       {a}
                     </button>
@@ -428,11 +530,12 @@ export default function Game() {
               </div>
             </div>
           </div>
+          </div>
         </main>
 
-        <aside className="flex flex-col gap-2 lg:w-64 flex-shrink-0 overflow-hidden">
-          <div className="rounded-lg bg-white/[0.04] border border-white/[0.06] p-3 flex-shrink-0">
-            <h3 className="text-[var(--color-cream)]/50 text-[10px] font-medium uppercase tracking-wider mb-2">Rewards</h3>
+        <aside className="flex flex-col gap-1.5 md:gap-2 lg:w-60 flex-shrink-0 min-h-0">
+          <div className="rounded-lg bg-white/[0.04] border border-white/[0.06] p-2 md:p-3 flex-shrink-0">
+            <h3 className="text-[var(--color-cream)]/50 text-[10px] font-medium uppercase tracking-wider mb-1.5">Rewards</h3>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
               <div><p className="text-[var(--color-cream)]/50 text-[10px]">Points</p><p className="font-medium tabular-nums text-[var(--color-gold)]">{session.points ?? 0}</p></div>
               <div><p className="text-[var(--color-cream)]/50 text-[10px]">Level</p><p className="font-medium tabular-nums">{session.level ?? 0}</p></div>

@@ -61,7 +61,7 @@ export default function HowToPlay() {
 
           <h3 className="text-[var(--color-cream)] font-display text-lg font-semibold mt-6 mb-2">Flow of a hand</h3>
           <p className="text-[var(--color-cream)]/85 leading-relaxed mb-4">
-            Each hand follows: <strong className="text-[var(--color-gold)]">Deal → Preflop → Flop → Turn → River → Showdown</strong>. The dealer posts the <strong className="text-[var(--color-cream)]">small blind (1 chip)</strong>, the other player the <strong className="text-[var(--color-cream)]">big blind (2 chips)</strong>. These go into the pot before any cards are dealt. Roles alternate each hand.
+            Each hand follows: <strong className="text-[var(--color-gold)]">Deal → Preflop → Flop → Turn → River → Showdown</strong>. The dealer posts the <strong className="text-[var(--color-cream)]">small blind</strong> (e.g. 1 chip), the other player the <strong className="text-[var(--color-cream)]">big blind</strong> (e.g. 2 chips). These go into the pot before any cards are dealt. Who is dealer (and thus who pays SB vs BB) <strong className="text-[var(--color-gold)]">rotates every hand</strong>: one hand you pay the small blind and the AI the big blind; the next hand you pay the big blind and the AI the small blind. You can't reverse it mid-hand—it's fixed by who has the dealer button that hand.
           </p>
 
           <ul className="space-y-3 text-[var(--color-cream)]/85 mb-6">
